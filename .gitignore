@@ -1,3 +1,7 @@
+# Various folders and files
+LOGS
+.DS_Store
+
 # Compiled Lua sources
 luac.out
 
