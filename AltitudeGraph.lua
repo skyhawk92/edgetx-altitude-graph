@@ -38,7 +38,7 @@ local function drawYsectors()
 end
 
 local function drawSelector()
-  lcd.drawText(90, 1, "Page" .. CurrentPage .. "/" .. AllPages, SMLSIZE)
+  lcd.drawText(85, 1, "Page " .. CurrentPage .. "/" .. AllPages, SMLSIZE)
   local selectedAltitudeValue = AltitudeData[SelectorPosition]
 
   -- Draws line with offset to the right
@@ -157,7 +157,7 @@ local function initialCSVread()
   return 1
 end
 
-local function readCSValtitude(fromLine, toLine)
+local function readCSValtitude()
   local fileName = nil
 
   for fname in dir("/LOGS") do
@@ -174,31 +174,31 @@ local function readCSValtitude(fromLine, toLine)
 -- Read lines from the file
   local altitudeDataIndex = 0
   local lineCount = 1
-  while true do
+  local allLinesRead = false
+
+  while not allLinesRead do
     local line = ""
     local char = io.read(file, 1)
-
+    
     while char and char ~= "\n" do
-        line = line .. char
-        char = io.read(file, 1)
+      line = line .. char
+      if line == "" then 
+        allLinesRead = true
+        break
+      end
+      char = io.read(file, 1)
     end
-
-    if line == "" then 
-      break 
-    end
-
-    local splittedLine = split(line)
 
     -- TODO Curently this reads first actual minute of flight
-    if lineCount > fromLine and lineCount < toLine then
+    if lineCount > 1 and not allLinesRead then
+      local splittedLine = split(line)
+
       for key, value in pairs(splittedLine) do
         if key == AltitudeColumn then
           AltitudeData[altitudeDataIndex] = math.ceil(value)
         end
       end
       altitudeDataIndex = altitudeDataIndex + 1
-    elseif lineCount >= toLine then
-      break
     end
 
     lineCount = lineCount + 1
@@ -210,13 +210,26 @@ local function readCSValtitude(fromLine, toLine)
   end
 
   io.close(file)
+
+  -- Calculate number of pages based on available screen space
+  AllPages = (altitudeDataIndex - 1)/120 + 60
+
   return 1
 end
 
 local function drawAltitudeData()
   local timeXaxis = 6
+  local dataPageOffset = (CurrentPage - 1) * 120 
+  local dataTo = #AltitudeData
 
-  for i = 0, #AltitudeData do
+  --TODO Limit data shown
+  if((CurrentPage * 120) < #AltitudeData) then
+    dataTo = (CurrentPage * 120)
+  end
+
+
+  --for i = 0, #AltitudeData do
+  for i = (0 + dataPageOffset), dataTo do
     local height = AltitudeData[i]
     lcd.drawLine(timeXaxis,54,timeXaxis,(54 - height),SOLID, 0)
     timeXaxis = timeXaxis + 1
@@ -226,8 +239,11 @@ end
 local function init()
   -- init is called once when model is loaded
   print("Script init function executed")
+  lcd.clear()
+  lcd.drawText(20,25, 'LOADING LOG FILE', SMLSIZE)
+
   initialCSVread()
-  readCSValtitude(700, 2000)
+  readCSValtitude()
 end
   
 local function run(event, touchState)
@@ -245,6 +261,14 @@ local function run(event, touchState)
     end
     if event == EVT_ROT_LEFT and SelectorPosition > 0 then
       SelectorPosition = SelectorPosition - 1
+    end
+
+    if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
+      CurrentPage = CurrentPage + 1
+    end
+
+    if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
+      CurrentPage = CurrentPage - 1
     end
   end
 
