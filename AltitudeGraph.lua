@@ -1,15 +1,14 @@
 -- AvailableWidth = 128
 -- LcdHeight = 64
 
-local fakeData = {30, 31, 31, 31, 32, 32, 31, 31, 30, 30, 29, 28, 27, 26, 25, 25, 25, 25, 24, 25, 26, 27, 27, 25, 25, 23, 22, 21, 21, 21, 21, 20, 19, 19, 19, 18, 18, 18, 18, 17, 17, 15, 15, 14, 13, 12, 12, 12, 12, 13 ,12, 13, 12, 11, 10 ,9 ,9 ,9, 8, 7, 6, 6, 6, 5, 5, 5, 4, 3, 2, 1, 1, 1, 0 ,0 ,0}
-
 TimeIncrement = 0
 TimeColumn = nil
 AltitudeColumn = nil
 AltitudeData = {}
 
 SelectorPosition = 100
-SelectorPositionPage = 1
+CurrentPage = 1
+AllPages = 1
 
 local function drawGraph()
   local x1, y1 = 20, 20
@@ -39,6 +38,7 @@ local function drawYsectors()
 end
 
 local function drawSelector()
+  lcd.drawText(90, 1, "Page" .. CurrentPage .. "/" .. AllPages, SMLSIZE)
   local selectedAltitudeValue = AltitudeData[SelectorPosition]
 
   -- Draws line with offset to the right
@@ -157,7 +157,7 @@ local function initialCSVread()
   return 1
 end
 
-local function readCSValtitude()
+local function readCSValtitude(fromLine, toLine)
   local fileName = nil
 
   for fname in dir("/LOGS") do
@@ -190,14 +190,14 @@ local function readCSValtitude()
     local splittedLine = split(line)
 
     -- TODO Curently this reads first actual minute of flight
-    if lineCount > 330 and lineCount < 600 then
+    if lineCount > fromLine and lineCount < toLine then
       for key, value in pairs(splittedLine) do
         if key == AltitudeColumn then
           AltitudeData[altitudeDataIndex] = math.ceil(value)
         end
       end
       altitudeDataIndex = altitudeDataIndex + 1
-    elseif lineCount >= 450 then
+    elseif lineCount >= toLine then
       break
     end
 
@@ -211,16 +211,6 @@ local function readCSValtitude()
 
   io.close(file)
   return 1
-end
-
--- TODO align time with x axis markers
-local function drawFakeData()
-  local timeXaxis = 6
-  for i = 1, #fakeData do
-    local height = fakeData[i]
-    lcd.drawLine(timeXaxis,54,timeXaxis,(54 - height),SOLID, 0)
-    timeXaxis = timeXaxis + 1
-  end
 end
 
 local function drawAltitudeData()
@@ -237,7 +227,7 @@ local function init()
   -- init is called once when model is loaded
   print("Script init function executed")
   initialCSVread()
-  readCSValtitude()
+  readCSValtitude(700, 2000)
 end
   
 local function run(event, touchState)
@@ -247,7 +237,6 @@ local function run(event, touchState)
   drawXsectors()
   drawYsectors()
   drawAltitudeData()
-  -- drawFakeData()
   drawSelector()
 
   if event ~= 0 then
