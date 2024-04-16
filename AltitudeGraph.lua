@@ -9,6 +9,9 @@ AltitudeData = {}
 SelectorPosition = 100
 CurrentPage = 1
 AllPages = 1
+FromMinute = 0
+ToMinute = 1
+MaxHeight = 50
 
 local function drawGraph()
   local x1, y1 = 20, 20
@@ -17,14 +20,15 @@ local function drawGraph()
 
   lcd.drawLine(5,5,5,55,SOLID, 0)
   lcd.drawLine(5,55,125,55,SOLID, 0)
-  lcd.drawText(0,0, '50(m)', SMLSIZE)
-  lcd.drawText(105,58, '1min', SMLSIZE)
+  lcd.drawText(0,0, MaxHeight .. '(m)', SMLSIZE)
+  lcd.drawText(5, 58, FromMinute .. ' min', SMLSIZE)
+  lcd.drawText(103,58, ToMinute .. ' min', SMLSIZE)
 end
 
 local function drawXsectors()
   local x=5
   for i=1,13 do
-    lcd.drawLine(x,56,x,58,SOLID, 0)
+    lcd.drawLine(x,56,x,56,SOLID, 0)
     x = x + 10
   end
 end
@@ -32,17 +36,22 @@ end
 local function drawYsectors()
   local y=55
   for i=1,10 do
-    lcd.drawLine(4,y,2,y,SOLID, 0)
+    lcd.drawLine(4,y,4,y,SOLID, 0)
     y = y - 5
   end
 end
 
 local function drawSelector()
-  lcd.drawText(85, 1, "Page " .. CurrentPage .. "/" .. AllPages, SMLSIZE)
-  local selectedAltitudeValue = AltitudeData[SelectorPosition]
+  lcd.drawText(82, 1, "Page " .. CurrentPage .. "/" .. AllPages, SMLSIZE)
+  local selectedAltidudeValuePosition = SelectorPosition + (CurrentPage - 1)*120
+  local selectedAltitudeValue = AltitudeData[selectedAltidudeValuePosition]
 
   -- Draws line with offset to the right
   lcd.drawLine(SelectorPosition + 6, 10, SelectorPosition + 6, 55, SOLID, 0) 
+
+  if selectedAltitudeValue == nil then
+    selectedAltitudeValue = 0
+  end
 
   if(SelectorPosition > 90) then
     lcd.drawText(SelectorPosition - 20, 10, selectedAltitudeValue .. "(m)", SMLSIZE)
@@ -145,7 +154,7 @@ local function initialCSVread()
     end
   end
 
-  TimeIncrement = timeRef2 - timeRef1
+  TimeIncrement = timeRef2 - timeRef1 --Time increment is in miliseconds
   print("TIME INCREMENT IS: " .. TimeIncrement)
 
   if not file then
@@ -189,7 +198,6 @@ local function readCSValtitude()
       char = io.read(file, 1)
     end
 
-    -- TODO Curently this reads first actual minute of flight
     if lineCount > 1 and not allLinesRead then
       local splittedLine = split(line)
 
@@ -211,8 +219,7 @@ local function readCSValtitude()
 
   io.close(file)
 
-  -- Calculate number of pages based on available screen space
-  AllPages = (altitudeDataIndex - 1)/120 + 60
+  AllPages = math.ceil((altitudeDataIndex - 1)/120 + 1)
 
   return 1
 end
@@ -222,22 +229,38 @@ local function drawAltitudeData()
   local dataPageOffset = (CurrentPage - 1) * 120 
   local dataTo = #AltitudeData
 
-  --TODO Limit data shown
   if((CurrentPage * 120) < #AltitudeData) then
     dataTo = (CurrentPage * 120)
   end
 
+  --TODO Account for ßdifferent timeIncrement options here(1s, 0,25s etc...)
+
+  local heightDivider = 1
+
+  for i = (0 + dataPageOffset), dataTo do
+    local height = AltitudeData[i]
+    if height > 50 then
+      MaxHeight = 100
+      heightDivider = 2
+    elseif height > 100 then
+      MaxHeight = 150
+      heightDivider = 3
+    else 
+      MaxHeight = 50
+      heightDivider = 1
+    end
+  end
 
   --for i = 0, #AltitudeData do
   for i = (0 + dataPageOffset), dataTo do
-    local height = AltitudeData[i]
+    local height = math.ceil(AltitudeData[i]/heightDivider)
     lcd.drawLine(timeXaxis,54,timeXaxis,(54 - height),SOLID, 0)
     timeXaxis = timeXaxis + 1
   end
 end
 
+-- init is called once when model is loaded
 local function init()
-  -- init is called once when model is loaded
   print("Script init function executed")
   lcd.clear()
   lcd.drawText(20,25, 'LOADING LOG FILE', SMLSIZE)
@@ -247,7 +270,6 @@ local function init()
 end
   
 local function run(event, touchState)
-  -- code to execute
   lcd.clear()
   drawGraph()
   drawXsectors()
@@ -258,24 +280,39 @@ local function run(event, touchState)
   if event ~= 0 then
     if event == EVT_ROT_RIGHT and SelectorPosition < 118 then
       SelectorPosition = SelectorPosition + 1
+    elseif SelectorPosition == 118 and CurrentPage < AllPages then
+      CurrentPage = CurrentPage + 1
+      SelectorPosition = 1
+      FromMinute = FromMinute + 1
+      ToMinute = ToMinute + 1
     end
+
     if event == EVT_ROT_LEFT and SelectorPosition > 0 then
       SelectorPosition = SelectorPosition - 1
+    elseif SelectorPosition == 0 and CurrentPage > 1 then
+      CurrentPage = CurrentPage - 1
+      SelectorPosition = 117
+      FromMinute = FromMinute - 1
+      ToMinute = ToMinute - 1
     end
 
     if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
       CurrentPage = CurrentPage + 1
+      FromMinute = FromMinute + 1
+      ToMinute = ToMinute + 1
     end
 
     if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
       CurrentPage = CurrentPage - 1
+      FromMinute = FromMinute - 1
+      ToMinute = ToMinute - 1
     end
   end
 
   if event == EVT_EXIT_BREAK then
     return 1
   end
+
   return 0
 end
-  
 return { run=run, init=init }
