@@ -1,6 +1,8 @@
 -- AvailableWidth = 128
 -- LcdHeight = 64
 
+SelectedLogFilename = ""
+
 TimeIncrement = 0
 TimeColumn = nil
 AltitudeColumn = nil
@@ -13,6 +15,11 @@ FromMinute = 0
 ToMinute = 1
 MaxHeight = 50
 
+local function logSelector()
+  
+end
+
+
 local function drawGraph()
   local x1, y1 = 20, 20
   local x2, y2 = 100, 50
@@ -21,8 +28,8 @@ local function drawGraph()
   lcd.drawLine(5,5,5,55,SOLID, 0)
   lcd.drawLine(5,55,125,55,SOLID, 0)
   lcd.drawText(0,0, MaxHeight .. '(m)', SMLSIZE)
-  lcd.drawText(5, 58, FromMinute .. ' min', SMLSIZE)
-  lcd.drawText(103,58, ToMinute .. ' min', SMLSIZE)
+  --lcd.drawText(5, 58, FromMinute .. ' min', SMLSIZE)
+  --lcd.drawText(103,58, ToMinute .. ' min', SMLSIZE)
 end
 
 local function drawXsectors()
@@ -57,6 +64,15 @@ local function drawSelector()
     lcd.drawText(SelectorPosition - 20, 10, selectedAltitudeValue .. "(m)", SMLSIZE)
   else
     lcd.drawText(SelectorPosition + 8, 10, selectedAltitudeValue .. '(m)', SMLSIZE)
+  end
+
+  local allSeconds = (selectedAltidudeValuePosition * TimeIncrement) / 1000
+  local minutes = math.floor(allSeconds / 60)
+  local seconds = math.floor((allSeconds % 60) + 0.5)
+  if(SelectorPosition > 90) then
+    lcd.drawText(SelectorPosition - 20, 58, minutes .. "m" .. seconds .. "s", SMLSIZE)
+  else
+    lcd.drawText(SelectorPosition + 8, 58, minutes .. 'm' .. seconds .. "s", SMLSIZE)
   end
 end
 
@@ -236,20 +252,27 @@ local function drawAltitudeData()
   --TODO Account for ßdifferent timeIncrement options here(1s, 0,25s etc...)
 
   local heightDivider = 1
+  local tmpMaxHeight = 0
 
   for i = (0 + dataPageOffset), dataTo do
     local height = AltitudeData[i]
-    if height > 50 then
-      MaxHeight = 100
-      heightDivider = 2
-    elseif height > 100 then
-      MaxHeight = 150
-      heightDivider = 3
-    else 
-      MaxHeight = 50
-      heightDivider = 1
+    if height > tmpMaxHeight then
+      tmpMaxHeight = height
     end
   end
+
+  if tmpMaxHeight > 50 then
+    MaxHeight = 100
+    heightDivider = 2
+  elseif tmpMaxHeight > 100 then
+    MaxHeight = 150
+    heightDivider = 3
+  else 
+    MaxHeight = 50
+    heightDivider = 1
+  end
+
+  print("DIVIDER: " .. heightDivider .. " " .. MaxHeight)
 
   --for i = 0, #AltitudeData do
   for i = (0 + dataPageOffset), dataTo do
@@ -263,7 +286,7 @@ end
 local function init()
   print("Script init function executed")
   lcd.clear()
-  lcd.drawText(20,25, 'LOADING LOG FILE', SMLSIZE)
+  lcd.drawText(25,25, 'LOADING LOG FILE', SMLSIZE)
 
   initialCSVread()
   readCSValtitude()
@@ -271,48 +294,61 @@ end
   
 local function run(event, touchState)
   lcd.clear()
-  drawGraph()
-  drawXsectors()
-  drawYsectors()
-  drawAltitudeData()
-  drawSelector()
 
-  if event ~= 0 then
-    if event == EVT_ROT_RIGHT and SelectorPosition < 118 then
-      SelectorPosition = SelectorPosition + 1
-    elseif SelectorPosition == 118 and CurrentPage < AllPages then
-      CurrentPage = CurrentPage + 1
-      SelectorPosition = 1
-      FromMinute = FromMinute + 1
-      ToMinute = ToMinute + 1
+  if SelectedLogFilename == "" then
+    lcd.drawText(25,1, 'SELECT LOG FILE', SMLSIZE)
+    lcd.drawRectangle(4, 10, 116, 50)
+
+    for fname in dir("/LOGS") do
+      print(fname)
+      fileName = "/LOGS/" .. fname
     end
 
-    if event == EVT_ROT_LEFT and SelectorPosition > 0 then
-      SelectorPosition = SelectorPosition - 1
-    elseif SelectorPosition == 0 and CurrentPage > 1 then
-      CurrentPage = CurrentPage - 1
-      SelectorPosition = 117
-      FromMinute = FromMinute - 1
-      ToMinute = ToMinute - 1
+    return 0
+  else
+    drawGraph()
+    drawXsectors()
+    drawYsectors()
+    drawAltitudeData()
+    drawSelector()
+
+    if event ~= 0 then
+      if event == EVT_ROT_RIGHT and SelectorPosition < 118 then
+        SelectorPosition = SelectorPosition + 1
+      elseif SelectorPosition == 118 and CurrentPage < AllPages then
+        CurrentPage = CurrentPage + 1
+        SelectorPosition = 1
+        FromMinute = FromMinute + 1
+        ToMinute = ToMinute + 1
+      end
+
+      if event == EVT_ROT_LEFT and SelectorPosition > 0 then
+        SelectorPosition = SelectorPosition - 1
+      elseif SelectorPosition == 0 and CurrentPage > 1 then
+        CurrentPage = CurrentPage - 1
+        SelectorPosition = 117
+        FromMinute = FromMinute - 1
+        ToMinute = ToMinute - 1
+      end
+
+      if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
+        CurrentPage = CurrentPage + 1
+        FromMinute = FromMinute + 1
+        ToMinute = ToMinute + 1
+      end
+
+      if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
+        CurrentPage = CurrentPage - 1
+        FromMinute = FromMinute - 1
+        ToMinute = ToMinute - 1
+      end
     end
 
-    if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
-      CurrentPage = CurrentPage + 1
-      FromMinute = FromMinute + 1
-      ToMinute = ToMinute + 1
+    if event == EVT_EXIT_BREAK then
+      return 1
     end
 
-    if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
-      CurrentPage = CurrentPage - 1
-      FromMinute = FromMinute - 1
-      ToMinute = ToMinute - 1
-    end
+    return 0
   end
-
-  if event == EVT_EXIT_BREAK then
-    return 1
-  end
-
-  return 0
 end
 return { run=run, init=init }
