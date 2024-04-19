@@ -2,6 +2,10 @@
 -- LcdHeight = 64
 
 SelectedLogFilename = ""
+LogFiles = {}
+SelectedFileDisplayIndex = 0
+DisplayFileNameIndexFrom = 0
+DisplayFileNameIndexTo = 4
 
 TimeIncrement = 0
 TimeColumn = nil
@@ -103,14 +107,8 @@ local function split(str)
 end
 
 -- Retrieves time increment, and altitude column
-local function initialCSVread()
+local function initialCSVread(fileName)
   local csv_table = {}
-  local fileName = nil
-
-  for fname in dir("/LOGS") do
-      print(fname)
-      fileName = "/LOGS/" .. fname
-  end
 
   local file = io.open(fileName, 'r')
 
@@ -171,7 +169,7 @@ local function initialCSVread()
   end
 
   TimeIncrement = timeRef2 - timeRef1 --Time increment is in miliseconds
-  print("TIME INCREMENT IS: " .. TimeIncrement)
+  --print("TIME INCREMENT IS: " .. TimeIncrement)
 
   if not file then
     print("Error: Could not open file " .. fileName)
@@ -179,22 +177,13 @@ local function initialCSVread()
   end
 
   io.close(file)
-  return 1
 end
 
-local function readCSValtitude()
-  local fileName = nil
-
-  for fname in dir("/LOGS") do
-      print(fname)
-      fileName = "/LOGS/" .. fname
-  end
-
+local function readCSValtitude(fileName)
   local file = io.open(fileName, 'r')
 
-  -- TODO Ignore first n lines when flight did not start yet
+  -- TODO Possibly ignore first n lines when flight did not start yet
   local flightStarted = false 
-
 
 -- Read lines from the file
   local altitudeDataIndex = 0
@@ -236,8 +225,7 @@ local function readCSValtitude()
   io.close(file)
 
   AllPages = math.ceil((altitudeDataIndex - 1)/120 + 1)
-
-  return 1
+  LogFileRead = true
 end
 
 local function drawAltitudeData()
@@ -272,8 +260,6 @@ local function drawAltitudeData()
     heightDivider = 1
   end
 
-  print("DIVIDER: " .. heightDivider .. " " .. MaxHeight)
-
   --for i = 0, #AltitudeData do
   for i = (0 + dataPageOffset), dataTo do
     local height = math.ceil(AltitudeData[i]/heightDivider)
@@ -286,61 +272,103 @@ end
 local function init()
   print("Script init function executed")
   lcd.clear()
-  lcd.drawText(25,25, 'LOADING LOG FILE', SMLSIZE)
 
-  initialCSVread()
-  readCSValtitude()
+  local fileNameIndex = 0
+  for fname in dir("/LOGS") do
+    LogFiles[fileNameIndex] = fname
+    fileNameIndex = fileNameIndex + 1
+  end
 end
   
 local function run(event, touchState)
   lcd.clear()
 
   if SelectedLogFilename == "" then
-    lcd.drawText(25,1, 'SELECT LOG FILE', SMLSIZE)
-    lcd.drawRectangle(4, 10, 116, 50)
+    lcd.drawText(28,1, 'SELECT LOG FILE', SMLSIZE)
+    lcd.drawLine(0, 10, 128, 10, SOLID, 0)
 
-    for fname in dir("/LOGS") do
-      print(fname)
-      fileName = "/LOGS/" .. fname
+    local rowSpacing = 13
+
+    for i = DisplayFileNameIndexFrom, DisplayFileNameIndexTo do
+      if i < #LogFiles then
+        lcd.drawText(0,rowSpacing, LogFiles[i], SMLSIZE)
+        rowSpacing = rowSpacing + 10
+      end
+    end
+
+    lcd.drawFilledRectangle(0,(SelectedFileDisplayIndex+1) * 10, 128, 11, 0)
+
+    if event ~= 0 then
+      if event == EVT_ROT_RIGHT and SelectedFileDisplayIndex <= DisplayFileNameIndexTo then
+        SelectedFileDisplayIndex = SelectedFileDisplayIndex + 1
+
+       if SelectedFileDisplayIndex > DisplayFileNameIndexTo then
+        SelectedFileDisplayIndex = 0
+        DisplayFileNameIndexFrom = DisplayFileNameIndexFrom + 5
+        DisplayFileNameIndexTo = DisplayFileNameIndexTo + 5
+       end
+      end
+
+      if event == EVT_ROT_LEFT and SelectedFileDisplayIndex >= 0 then
+        SelectedFileDisplayIndex = SelectedFileDisplayIndex - 1
+        if DisplayFileNameIndexFrom > 0 and SelectedFileDisplayIndex < 0 then
+          SelectedFileDisplayIndex = 4
+          DisplayFileNameIndexFrom = DisplayFileNameIndexFrom - 5
+          DisplayFileNameIndexTo = DisplayFileNameIndexTo - 5
+        elseif DisplayFileNameIndexFrom == 0 and SelectedFileDisplayIndex < 0 then
+          SelectedFileDisplayIndex = 0  
+        end
+      end
+
+      if event == EVT_ROT_BREAK then
+        lcd.clear()
+        lcd.drawText(25,25, 'LOADING LOG FILE', SMLSIZE)
+        SelectedLogFilename = "/LOGS/" .. LogFiles[SelectedFileDisplayIndex]
+      end
     end
 
     return 0
   else
-    drawGraph()
-    drawXsectors()
-    drawYsectors()
-    drawAltitudeData()
-    drawSelector()
+    if not LogFileRead then
+      initialCSVread(SelectedLogFilename)
+      readCSValtitude(SelectedLogFilename)
+    else
+      drawGraph()
+      drawXsectors()
+      drawYsectors()
+      drawAltitudeData()
+      drawSelector()
 
-    if event ~= 0 then
-      if event == EVT_ROT_RIGHT and SelectorPosition < 118 then
-        SelectorPosition = SelectorPosition + 1
-      elseif SelectorPosition == 118 and CurrentPage < AllPages then
-        CurrentPage = CurrentPage + 1
-        SelectorPosition = 1
-        FromMinute = FromMinute + 1
-        ToMinute = ToMinute + 1
-      end
+      if event ~= 0 then
+        if event == EVT_ROT_RIGHT and SelectorPosition < 118 then
+          SelectorPosition = SelectorPosition + 1
+        elseif SelectorPosition == 118 and CurrentPage < AllPages then
+          CurrentPage = CurrentPage + 1
+          SelectorPosition = 1
+          FromMinute = FromMinute + 1
+          ToMinute = ToMinute + 1
+        end
 
-      if event == EVT_ROT_LEFT and SelectorPosition > 0 then
-        SelectorPosition = SelectorPosition - 1
-      elseif SelectorPosition == 0 and CurrentPage > 1 then
-        CurrentPage = CurrentPage - 1
-        SelectorPosition = 117
-        FromMinute = FromMinute - 1
-        ToMinute = ToMinute - 1
-      end
+        if event == EVT_ROT_LEFT and SelectorPosition > 0 then
+          SelectorPosition = SelectorPosition - 1
+        elseif SelectorPosition == 0 and CurrentPage > 1 then
+          CurrentPage = CurrentPage - 1
+          SelectorPosition = 117
+          FromMinute = FromMinute - 1
+          ToMinute = ToMinute - 1
+        end
 
-      if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
-        CurrentPage = CurrentPage + 1
-        FromMinute = FromMinute + 1
-        ToMinute = ToMinute + 1
-      end
+        if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
+          CurrentPage = CurrentPage + 1
+          FromMinute = FromMinute + 1
+          ToMinute = ToMinute + 1
+        end
 
-      if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
-        CurrentPage = CurrentPage - 1
-        FromMinute = FromMinute - 1
-        ToMinute = ToMinute - 1
+        if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
+          CurrentPage = CurrentPage - 1
+          FromMinute = FromMinute - 1
+          ToMinute = ToMinute - 1
+        end
       end
     end
 
