@@ -1,6 +1,7 @@
 -- AvailableWidth = 128
 -- LcdHeight = 64
 
+LogDirectory = "/LOGS"
 SelectedLogFilename = ""
 LogFiles = {}
 SelectedFileDisplayIndex = 0
@@ -15,8 +16,6 @@ AltitudeData = {}
 SelectorPosition = 100
 CurrentPage = 1
 AllPages = 1
-FromMinute = 0
-ToMinute = 1
 MaxHeight = 50
 
 local function logSelector()
@@ -31,9 +30,7 @@ local function drawGraph()
 
   lcd.drawLine(5,5,5,55,SOLID, 0)
   lcd.drawLine(5,55,125,55,SOLID, 0)
-  lcd.drawText(0,0, MaxHeight .. '(m)', SMLSIZE)
-  --lcd.drawText(5, 58, FromMinute .. ' min', SMLSIZE)
-  --lcd.drawText(103,58, ToMinute .. ' min', SMLSIZE)
+  lcd.drawText(0,1, MaxHeight .. '(m)', SMLSIZE)
 end
 
 local function drawXsectors()
@@ -237,7 +234,7 @@ local function drawAltitudeData()
     dataTo = (CurrentPage * 120)
   end
 
-  --TODO Account for ßdifferent timeIncrement options here(1s, 0,25s etc...)
+  --TODO Account for different timeIncrement options here(1s, 0,25s etc...)
 
   local heightDivider = 1
   local tmpMaxHeight = 0
@@ -274,7 +271,7 @@ local function init()
   lcd.clear()
 
   local fileNameIndex = 0
-  for fname in dir("/LOGS") do
+  for fname in dir(LogDirectory) do
     LogFiles[fileNameIndex] = fname
     fileNameIndex = fileNameIndex + 1
   end
@@ -323,7 +320,7 @@ local function run(event, touchState)
       if event == EVT_ROT_BREAK then
         lcd.clear()
         lcd.drawText(25,25, 'LOADING LOG FILE', SMLSIZE)
-        SelectedLogFilename = "/LOGS/" .. LogFiles[SelectedFileDisplayIndex]
+        SelectedLogFilename = LogDirectory .. "/" .. LogFiles[SelectedFileDisplayIndex]
       end
     end
 
@@ -345,8 +342,6 @@ local function run(event, touchState)
         elseif SelectorPosition == 118 and CurrentPage < AllPages then
           CurrentPage = CurrentPage + 1
           SelectorPosition = 1
-          FromMinute = FromMinute + 1
-          ToMinute = ToMinute + 1
         end
 
         if event == EVT_ROT_LEFT and SelectorPosition > 0 then
@@ -354,20 +349,14 @@ local function run(event, touchState)
         elseif SelectorPosition == 0 and CurrentPage > 1 then
           CurrentPage = CurrentPage - 1
           SelectorPosition = 117
-          FromMinute = FromMinute - 1
-          ToMinute = ToMinute - 1
         end
 
         if event == EVT_VIRTUAL_NEXT_PAGE and CurrentPage < AllPages then
           CurrentPage = CurrentPage + 1
-          FromMinute = FromMinute + 1
-          ToMinute = ToMinute + 1
         end
 
         if event == EVT_VIRTUAL_PREV_PAGE and CurrentPage > 1 then
           CurrentPage = CurrentPage - 1
-          FromMinute = FromMinute - 1
-          ToMinute = ToMinute - 1
         end
       end
     end
